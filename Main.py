@@ -1,131 +1,201 @@
+import os
+import argparse
+import logging
+import urllib.request
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-# ==============================
-# 1. LOAD DATA
-# ==============================
+# ======================================================
+# CONFIGURATION
+# ======================================================
+
+DEFAULT_DATA_URL = (
+    "https://archive.ics.uci.edu/ml/machine-learning-databases/"
+    "breast-cancer-wisconsin/wdbc.data"
+)
+
+COLUMN_NAMES = [
+    "id", "diagnosis",
+    "radius_mean", "texture_mean", "perimeter_mean", "area_mean",
+    "smoothness_mean", "compactness_mean", "concavity_mean",
+    "concave_points_mean", "symmetry_mean", "fractal_dimension_mean",
+    "radius_se", "texture_se", "perimeter_se", "area_se",
+    "smoothness_se", "compactness_se", "concavity_se",
+    "concave_points_se", "symmetry_se", "fractal_dimension_se",
+    "radius_worst", "texture_worst", "perimeter_worst", "area_worst",
+    "smoothness_worst", "compactness_worst", "concavity_worst",
+    "concave_points_worst", "symmetry_worst", "fractal_dimension_worst"
+]
+
+
+# ======================================================
+# LOGGING SETUP
+# ======================================================
+
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+
+
+# ======================================================
+# DATA DOWNLOAD
+# ======================================================
+
+def download_dataset(save_path):
+    logging.info("Dataset not found. Downloading from UCI repository...")
+    urllib.request.urlretrieve(DEFAULT_DATA_URL, save_path)
+    logging.info("Dataset downloaded successfully.")
+
+
+# ======================================================
+# LOAD DATA
+# ======================================================
 
 def load_data(path):
-    df = pd.read_csv(path)
-    print("Dataset Loaded Successfully.\n")
-    print("First 5 Rows:\n", df.head(), "\n")
-    print("Dataset Info:\n")
-    print(df.info())
+    df = pd.read_csv(path, header=None, names=COLUMN_NAMES)
+    logging.info("Dataset loaded successfully.")
     return df
 
 
-# ==============================
-# 2. DATA CLEANING
-# ==============================
+# ======================================================
+# CLEAN DATA
+# ======================================================
 
 def clean_data(df):
-    # Drop unnecessary columns if they exist
-    columns_to_drop = ["id", "Unnamed: 32"]
-    for col in columns_to_drop:
-        if col in df.columns:
-            df = df.drop(columns=[col])
+    df = df.drop(columns=["id"])
+    df["diagnosis"] = (df["diagnosis"] == "M").astype(int)
 
-    # Convert diagnosis to binary
-    if "diagnosis" in df.columns:
-        df["diagnosis"] = (df["diagnosis"] == "M").astype(int)
-
-    print("\nData Cleaning Completed.")
-    print("Missing Values:\n", df.isnull().sum())
+    logging.info("Data cleaning completed.")
+    logging.info(f"Missing values:\n{df.isnull().sum()}")
     return df
 
 
-# ==============================
-# 3. CLASS DISTRIBUTION
-# ==============================
+# ======================================================
+# PLOT SAVING UTILITY
+# ======================================================
 
-def plot_class_distribution(df):
-    plt.figure()
+def save_plot(fig, filename, results_dir):
+    os.makedirs(results_dir, exist_ok=True)
+    path = os.path.join(results_dir, filename)
+    fig.savefig(path)
+    plt.close(fig)
+    logging.info(f"Plot saved: {path}")
+
+
+# ======================================================
+# CLASS DISTRIBUTION
+# ======================================================
+
+def plot_class_distribution(df, results_dir):
+    fig = plt.figure()
     plt.hist(df["diagnosis"], bins=2)
-    plt.title("Class Distribution (0 = Benign, 1 = Malignant)")
+    plt.title("Class Distribution (0=Benign, 1=Malignant)")
     plt.xlabel("Diagnosis")
     plt.ylabel("Frequency")
-    plt.show()
+    save_plot(fig, "class_distribution.png", results_dir)
 
 
-# ==============================
-# 4. STATISTICAL ANALYSIS
-# ==============================
+# ======================================================
+# STATISTICAL ANALYSIS
+# ======================================================
 
 def statistical_analysis(df):
     malignant = df[df["diagnosis"] == 1]
     benign = df[df["diagnosis"] == 0]
 
-    print("\nMean Values (Malignant):\n")
-    print(malignant.mean())
+    logging.info("Mean values (Malignant):")
+    logging.info(malignant.mean())
 
-    print("\nMean Values (Benign):\n")
-    print(benign.mean())
+    logging.info("Mean values (Benign):")
+    logging.info(benign.mean())
 
-    # NumPy example
     feature = "radius_mean"
-    if feature in df.columns:
-        mal_mean_np = np.mean(malignant[feature].values)
-        ben_mean_np = np.mean(benign[feature].values)
+    mal_mean_np = np.mean(malignant[feature].values)
+    ben_mean_np = np.mean(benign[feature].values)
 
-        print(f"\nNumPy Mean Comparison for {feature}:")
-        print("Malignant:", mal_mean_np)
-        print("Benign:", ben_mean_np)
-
-        print("\nDifference:", abs(mal_mean_np - ben_mean_np))
+    logging.info(
+        f"NumPy mean difference for {feature}: "
+        f"{abs(mal_mean_np - ben_mean_np)}"
+    )
 
 
-# ==============================
-# 5. FEATURE DISTRIBUTION PLOT
-# ==============================
+# ======================================================
+# FEATURE DISTRIBUTION
+# ======================================================
 
-def plot_feature_distribution(df, feature):
+def plot_feature_distribution(df, feature, results_dir):
     malignant = df[df["diagnosis"] == 1]
     benign = df[df["diagnosis"] == 0]
 
-    if feature not in df.columns:
-        print(f"{feature} not found in dataset.")
-        return
-
-    plt.figure()
-    plt.hist(malignant[feature], alpha=0.5, label="Malignant", density=True)
-    plt.hist(benign[feature], alpha=0.5, label="Benign", density=True)
+    fig = plt.figure()
+    plt.hist(malignant[feature], alpha=0.5, density=True, label="Malignant")
+    plt.hist(benign[feature], alpha=0.5, density=True, label="Benign")
     plt.title(f"Distribution of {feature}")
     plt.xlabel(feature)
     plt.ylabel("Density")
     plt.legend()
-    plt.show()
+    save_plot(fig, f"{feature}_distribution.png", results_dir)
 
 
-# ==============================
-# 6. CORRELATION MATRIX
-# ==============================
+# ======================================================
+# CORRELATION MATRIX
+# ======================================================
 
-def plot_correlation_matrix(df):
+def plot_correlation_matrix(df, results_dir):
     corr = df.corr()
 
-    plt.figure()
+    fig = plt.figure(figsize=(10, 8))
     plt.imshow(corr)
     plt.colorbar()
     plt.title("Correlation Matrix")
     plt.xticks(range(len(corr.columns)), corr.columns, rotation=90)
     plt.yticks(range(len(corr.columns)), corr.columns)
-    plt.show()
+    save_plot(fig, "correlation_matrix.png", results_dir)
 
 
-# ==============================
-# 7. MAIN EXECUTION
-# ==============================
+# ======================================================
+# MAIN PIPELINE
+# ======================================================
 
 def main():
-    df = load_data("data/data.csv")
+    setup_logging()
+
+    parser = argparse.ArgumentParser(
+        description="Breast Cancer EDA Pipeline"
+    )
+
+    parser.add_argument(
+        "--data",
+        type=str,
+        default="breastcancer.csv",
+        help="Path to dataset (optional)"
+    )
+
+    parser.add_argument(
+        "--results",
+        type=str,
+        default="results",
+        help="Directory to save plots"
+    )
+
+    args = parser.parse_args()
+
+    data_path = args.data
+
+    # Auto-download if missing
+    if not os.path.exists(data_path):
+        download_dataset(data_path)
+
+    df = load_data(data_path)
     df = clean_data(df)
 
-    plot_class_distribution(df)
+    plot_class_distribution(df, args.results)
     statistical_analysis(df)
 
-    # Choose a few strong features
     important_features = [
         "radius_mean",
         "perimeter_mean",
@@ -133,11 +203,11 @@ def main():
     ]
 
     for feature in important_features:
-        plot_feature_distribution(df, feature)
+        plot_feature_distribution(df, feature, args.results)
 
-    plot_correlation_matrix(df)
+    plot_correlation_matrix(df, args.results)
 
-    print("\nEDA Completed Successfully.")
+    logging.info("EDA pipeline completed successfully.")
 
 
 if __name__ == "__main__":
